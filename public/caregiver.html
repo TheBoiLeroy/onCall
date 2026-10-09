@@ -30,10 +30,62 @@
     <div id="alerts"><p class="muted">No calls yet. Keep this page open — it will ring here.</p></div>
   </div>
 
+  <div class="card">
+    <h2>Medications</h2>
+    <p class="muted" id="medsEmpty">Add the medications she takes, then log each dose with one tap.</p>
+    <div id="medButtons" class="med-buttons"></div>
+
+    <details id="logOther" style="margin-top:12px">
+      <summary>Log a dose (other medication, or a different time)</summary>
+      <form id="medForm">
+        <label for="medName">Medication</label>
+        <input id="medName" list="medNames" maxlength="60" placeholder="e.g. Metformin" required>
+        <datalist id="medNames"></datalist>
+        <label for="medDose">Dose <span class="muted">(optional)</span></label>
+        <input id="medDose" maxlength="60" placeholder="e.g. 500 mg, 1 tablet">
+        <label for="medTime">Taken at</label>
+        <input id="medTime" type="datetime-local">
+        <label for="medNote">Note <span class="muted">(optional)</span></label>
+        <input id="medNote" maxlength="200" placeholder="e.g. with breakfast">
+        <label class="check"><input type="checkbox" id="medSave"> Add to her medication list</label>
+        <p><button type="submit">Log dose</button></p>
+      </form>
+    </details>
+
+    <details id="manageMeds" style="margin-top:8px">
+      <summary>Edit medication list</summary>
+      <div id="medList"></div>
+      <form id="addMedForm" class="row" style="margin-top:10px">
+        <input id="newMedName" maxlength="60" placeholder="Name" required style="flex:2;min-width:140px">
+        <input id="newMedDose" maxlength="60" placeholder="Dose" style="flex:1;min-width:100px">
+        <button type="submit">Add</button>
+      </form>
+    </details>
+
+    <h2 style="margin-top:20px">Log</h2>
+    <div id="medLog"><p class="muted">Nothing logged yet.</p></div>
+  </div>
+
+  <details class="card" id="teamCard">
+    <summary><b>Caregivers</b> <span class="muted" id="teamCount"></span></summary>
+    <p class="muted">Everyone here gets rung when they call. When one of you answers, the others see who's handling it.</p>
+    <div id="team"></div>
+    <hr style="margin:20px 0;border:0;border-top:1px solid #e3e8f2">
+    <p><b>Add another caregiver:</b> send them this link, or let them scan the code with their phone.</p>
+    <img class="qr" id="inviteQr" alt="QR code to join as a caregiver" style="max-width:180px">
+    <p class="link muted" id="inviteUrl"></p>
+    <div class="row">
+      <button class="secondary" id="shareInvite">Share invite link</button>
+      <button class="secondary" id="newInvite">New invite link (old one stops working)</button>
+    </div>
+  </details>
+
   <details class="card" id="pairCard">
     <summary><b>Pair the patient's device (QR code)</b></summary>
     <p class="muted">On their phone or tablet, open the camera and scan this code. Then tap “Add to Home Screen” so the button is always one tap away.</p>
     <img class="qr" id="qr" alt="QR code for the patient's call button">
+    <p class="muted" style="text-align:center">Can't scan? On their device, open this app, tap <b>I'm the patient</b> and type:</p>
+    <p class="pair-code" id="pairCode"></p>
     <p class="link muted" id="patientUrl"></p>
     <div class="row">
       <button class="secondary" id="printBtn">Print QR</button>

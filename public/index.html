@@ -12,21 +12,40 @@
 <body>
 <main>
   <div class="brand"><img src="/icon.svg" alt=""><h1>CareCall</h1></div>
-  <p class="muted">A "nurse call" button for care at home. You (the caregiver) create a care link,
-    the person you look after scans the QR code, and when they press their button your phone rings.</p>
+  <p class="muted">A "nurse call" button for care at home. When the person being cared for presses their button,
+    the caregiver's phone rings.</p>
 
   <div class="card" id="existing" hidden>
     <h2>Your care links</h2>
     <div id="links"></div>
   </div>
 
-  <form class="card" id="create">
+  <div class="card" id="chooser">
+    <h2>Who is using this device?</h2>
+    <div class="roles">
+      <button class="patient-role" id="pickPatient">I'm the patient<span>I want a button to call for help</span></button>
+      <button id="pickCaregiver">I'm the caregiver<span>I want my phone to ring when they need me</span></button>
+    </div>
+  </div>
+
+  <form class="card" id="join" hidden>
+    <h2>Connect to your caregiver</h2>
+    <p>Your caregiver sets this up on their phone first. Then:</p>
+    <p><b>Easiest:</b> point this device's camera at the QR code on their screen and tap the link that appears.</p>
+    <p><b>Or</b> type the 6-letter code shown under the QR code:</p>
+    <input id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC234" required>
+    <p class="muted" id="joinError" hidden></p>
+    <div class="row"><button type="submit">Connect</button><button type="button" class="secondary back">Back</button></div>
+  </form>
+
+  <form class="card" id="create" hidden>
     <h2>Set up a new care link</h2>
     <label for="patientName">Who are you caring for?</label>
     <input id="patientName" placeholder="e.g. Grandma Rose" maxlength="60" required>
     <label for="caregiverName">Your name (shown to them)</label>
     <input id="caregiverName" placeholder="e.g. Sam" maxlength="60" required>
-    <p><button type="submit">Create link &amp; QR code</button></p>
+    <div class="row" style="margin-top:16px"><button type="submit">Create link &amp; QR code</button><button type="button" class="secondary back">Back</button></div>
+    <p class="muted">Helping someone who's already set up? Ask a caregiver who's already on it to send you their invite link. You'll find it under <b>Caregivers</b> on their dashboard.</p>
   </form>
 </main>
 <script src="/store.js"></script>
@@ -41,6 +60,23 @@
       `<p><a href="/caregiver/${l.id}">${CareStore.esc(l.patientName)}</a> <span class="muted">— created ${new Date(l.createdAt).toLocaleDateString()}</span></p>`
     ).join('');
   }
+
+  const show = (id) => {
+    for (const el of ['chooser', 'join', 'create']) document.getElementById(el).hidden = el !== id;
+  };
+  document.getElementById('pickPatient').onclick = () => { show('join'); document.getElementById('code').focus(); };
+  document.getElementById('pickCaregiver').onclick = () => { show('create'); document.getElementById('patientName').focus(); };
+  document.querySelectorAll('.back').forEach((b) => { b.onclick = () => show('chooser'); });
+
+  document.getElementById('join').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = document.getElementById('joinError');
+    const code = document.getElementById('code').value.trim();
+    const res = await fetch(`/api/pair/${encodeURIComponent(code)}`);
+    const body = await res.json();
+    if (!res.ok) { err.textContent = body.error; err.hidden = false; return; }
+    location.href = `/p/${body.patientToken}`;
+  });
 
   document.getElementById('create').addEventListener('submit', async (e) => {
     e.preventDefault();

@@ -11,14 +11,22 @@ For now it should be a simple web app that can later become a regular phone app.
 ## What I built
 A Node.js web app (`server.js` plus plain HTML/JS in `public/`). It has no framework and one dependency, `qrcode`.
 
-- **Caregiver setup (`/`)**: enter the patient's name and your own name. This creates a private care link.
+- **Start page (`/`)**: first asks **I'm the patient** or **I'm the caregiver**.
+  - Caregiver: enter the patient's name and your own name. This creates a private care link.
+  - Patient: scan the QR code on the caregiver's screen, or type the 6-letter code shown under it.
 - **Caregiver dashboard (`/caregiver/:id`)**
   - Shows a **QR code** for the patient to scan, with a Print button for putting it by the bed or on the fridge.
   - When the patient calls, the whole screen flashes, a loud beep repeats (faster for Emergency and Pain), the phone vibrates and a system notification appears.
   - Buttons: **I'm on my way**, **Seen** and **Done**.
   - A call history and a "patient connected / offline" indicator.
-  - **Make a new QR** cancels the old pairing, for a lost phone or a new device.
+  - **Make a new QR** cancels the old pairing and its code, for a lost phone or a new device.
   - A private link to open the same dashboard on the caregiver's own phone.
+- **Medications log (caregiver dashboard)**
+  - Save her medication list (name and dose), then log each dose with one tap. Each button shows when that med was last taken.
+  - If the same med was logged in the last 3 hours, it asks before logging again, so two caregivers don't double-dose her.
+  - **Log a dose** handles a medication not on the list, an earlier time ("she took it at 8") and a note.
+  - The log is grouped by day (Today, Yesterday, …) and shows who logged each dose. Mistaken entries can be deleted.
+  - Every caregiver sees it update live. The patient's screen doesn't show meds. The last 1000 doses are kept.
 - **Patient screen (`/p/:token`, opened by scanning the QR)**
   - One big green **Call [caregiver]** button.
   - Quick buttons: Emergency, Bathroom, Water/food, I'm in pain, Come see me.
@@ -49,7 +57,7 @@ To use it away from home Wi-Fi, run it on a server or behind a tunnel and set `P
 ## Assumptions
 - I chose the default port **4321** because port 3000 on this Mac is already used by another app ("Mise").
 - There are no user accounts. The caregiver's secret key is saved in that browser, and the QR code itself is what lets the patient's device call. Anyone who has the QR link can ring the caregiver, and **Make a new QR** cancels it.
-- One caregiver per care link. Opening the private dashboard link on more devices makes them all ring.
+- A care link can have several caregivers. Each one joins with the invite link or QR code under **Caregivers** on the dashboard and gets their own name and key. Every caregiver's phone rings. When one answers, the others stop ringing and see who's handling it, and the patient sees that person's name ("Alex is on the way"). Any caregiver can remove another or make a new invite link. A care link always keeps at least one caregiver.
 - Quick-button choices and wording are my picks and easy to change (`ALERT_TYPES` in `server.js`, `QUICK` in `public/patient.js`).
 
 ## Not finished yet

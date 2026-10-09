@@ -35,6 +35,7 @@ button:disabled { opacity: .5; cursor: default; }
 
 /* ---------- caregiver ---------- */
 .qr { width: 100%; max-width: 260px; display: block; margin: 0 auto; }
+.pair-code { text-align: center; font: 800 2rem/1 ui-monospace, Menlo, monospace; letter-spacing: .25em; margin: 4px 0 16px; }
 .link { word-break: break-all; font-size: .85rem; }
 .alert { border-left: 6px solid var(--help); padding: 12px 14px; border-radius: 12px; background: #f7f9fd; margin: 10px 0; }
 .alert.urgent { border-color: var(--danger); }
@@ -64,5 +65,31 @@ body.patient main { display: flex; flex-direction: column; min-height: 100dvh; p
 .quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 .quick button { background: #fff; color: var(--text); padding: 18px 10px; font-size: 1.1rem; box-shadow: 0 2px 8px rgba(20, 30, 60, .08); }
 .quick button.emergency { background: var(--danger); color: #fff; grid-column: 1 / -1; font-size: 1.3rem; }
+/* "Who should come?" picker, only shown with 2+ caregivers */
+.who h2 { margin: 4px 0 8px; text-align: center; }
+.who-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.who-list button { background: #fff; color: var(--text); padding: 12px 18px; font-size: 1.1rem; border: 3px solid transparent; box-shadow: 0 2px 8px rgba(20, 30, 60, .08); }
+.who-list button[aria-checked="true"] { border-color: var(--help); background: #dcfce7; }
 .status { text-align: center; font-size: 1.3rem; font-weight: 700; min-height: 2em; }
 .status.coming { color: var(--help); }
+
+/* ---------- medications ---------- */
+.med-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.med-buttons button { text-align: left; padding: 14px; }
+.med-buttons button span { font-weight: 400; }
+.med-buttons small { display: block; font-weight: 400; color: var(--muted); margin-top: 4px; }
+button.small { padding: 6px 12px; font-size: .85rem; }
+label.check { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+label.check input { width: auto; }
+h3.day { font-size: .95rem; color: var(--muted); margin: 16px 0 6px; }
+.med-entry { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #eef1f7; }
+.med-entry .when { font-weight: 700; min-width: 4.8em; }
+.med-entry .what { flex: 1; }
+details summary { cursor: pointer; }
+
+/* ---------- start page ---------- */
+.roles { display: grid; gap: 12px; }
+.roles button { text-align: left; padding: 20px; font-size: 1.15rem; }
+.roles button span { display: block; font-weight: 400; font-size: .95rem; opacity: .85; margin-top: 4px; }
+.roles button.patient-role { background: var(--help); }
+#code { text-transform: uppercase; letter-spacing: .2em; font: 700 1.6rem ui-monospace, Menlo, monospace; text-align: center; }

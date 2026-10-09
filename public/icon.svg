@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#2563eb"/>
-  <circle cx="256" cy="256" r="150" fill="#16a34a" stroke="#fff" stroke-width="24"/>
-  <path d="M256 176v160M176 256h160" stroke="#fff" stroke-width="44" stroke-linecap="round"/>
+  <!-- call bell -->
+  <path d="M256 104c-66 0-112 50-112 116v62c0 22-10 40-30 56h284c-20-16-30-34-30-56v-62c0-66-46-116-112-116z" fill="#fff"/>
+  <path d="M212 366a44 44 0 0 0 88 0z" fill="#fff"/>
+  <!-- ringing waves -->
+  <path d="M106 168c8-30 24-54 46-72M406 168c-8-30-24-54-46-72" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
 </svg>

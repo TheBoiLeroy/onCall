@@ -9,6 +9,9 @@ window.CareStore = {
     rooms.unshift({ id: room.id, caregiverKey: room.caregiverKey, patientName: room.patientName, createdAt: room.createdAt });
     localStorage.setItem('carecall.rooms', JSON.stringify(rooms));
   },
+  remove(id) {
+    localStorage.setItem('carecall.rooms', JSON.stringify(this.all().filter((r) => r.id !== id)));
+  },
   esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },

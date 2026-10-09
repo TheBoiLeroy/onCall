@@ -16,6 +16,7 @@ const PORT = Number(process.env.PORT) || 4321;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_ALERTS_KEPT = 50;
+const MAX_MED_LOG_KEPT = 1000; // a few doses a day for most of a year
 
 const ALERT_TYPES = {
   help: { label: 'Needs help', urgent: false },
@@ -43,17 +44,55 @@ function save() {
 
 const token = (bytes) => crypto.randomBytes(bytes).toString('base64url');
 
+const newCaregiver = (name) => ({ id: token(6), name, key: token(18), joinedAt: Date.now() });
+
+for (const room of Object.values(db.rooms)) {
+  room.meds ||= []; // saved medication list: { id, name, dose }
+  room.medLog ||= []; // doses taken, newest first: { id, name, dose, takenAt, note, byId, byName, loggedAt }
+  // Care links made before multiple caregivers existed had one caregiverName/caregiverKey.
+  if (room.caregivers) continue;
+  room.caregivers = [{ ...newCaregiver(room.caregiverName || 'Caregiver'), key: room.caregiverKey }];
+  room.inviteToken = token(12);
+  delete room.caregiverName;
+  delete room.caregiverKey;
+}
+
+// Short code shown under the QR so the patient can type it instead of scanning.
+// No look-alike characters (0/O, 1/I/L).
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function pairCode() {
+  let code;
+  do {
+    code = Array.from(crypto.randomBytes(6), (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+  } while (Object.values(db.rooms).some((r) => r.pairCode === code));
+  return code;
+}
+
 function findRoomByPatientToken(t) {
   return Object.values(db.rooms).find((r) => r.patientToken === t);
+}
+
+// "Sam", "Sam & Alex", "Sam, Alex & Jo"
+function joinNames(names) {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} & ${names.at(-1)}`;
 }
 
 function publicRoom(room) {
   return {
     id: room.id,
     patientName: room.patientName,
-    caregiverName: room.caregiverName,
+    caregiverName: joinNames(room.caregivers.map((c) => c.name)),
+    caregivers: room.caregivers.map(({ id, name }) => ({ id, name })),
     createdAt: room.createdAt,
   };
+}
+
+const caregiverByKey = (room, key) => key && room.caregivers.find((c) => c.key === key);
+
+// A call goes to one caregiver (to/toName) or to everyone (to: null).
+function setTarget(alert, caregiver) {
+  alert.to = caregiver ? caregiver.id : null;
+  alert.toName = caregiver ? caregiver.name : null;
 }
 
 const activeAlerts = (room) =>
@@ -61,10 +100,10 @@ const activeAlerts = (room) =>
 
 // ---------- realtime (Server-Sent Events) ----------
 
-// roomId -> Set of { res, role }
+// roomId -> Set of { res, role, caregiverId }
 const listeners = new Map();
 
-function subscribe(roomId, role, req, res) {
+function subscribe(roomId, role, req, res, caregiverId) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -72,7 +111,7 @@ function subscribe(roomId, role, req, res) {
     'X-Accel-Buffering': 'no',
   });
   res.write('retry: 2000\n\n');
-  const entry = { res, role };
+  const entry = { res, role, caregiverId };
   if (!listeners.has(roomId)) listeners.set(roomId, new Set());
   listeners.get(roomId).add(entry);
   broadcastPresence(roomId);
@@ -82,28 +121,35 @@ function subscribe(roomId, role, req, res) {
   });
 }
 
-function send(roomId, event, data, onlyRole) {
-  for (const { res, role } of listeners.get(roomId) || []) {
-    if (onlyRole && role !== onlyRole) continue;
+// `only` is a role ('caregiver' / 'patient') or a caregiver id.
+function send(roomId, event, data, only) {
+  for (const { res, role, caregiverId } of listeners.get(roomId) || []) {
+    if (res.writableEnded || (only && role !== only && caregiverId !== only)) continue;
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   }
 }
 
 function presence(roomId) {
-  const set = listeners.get(roomId) || new Set();
-  let caregivers = 0;
+  const online = new Set();
   let patients = 0;
-  for (const { role } of set) role === 'caregiver' ? caregivers++ : patients++;
-  return { caregivers, patients };
+  for (const { role, caregiverId } of listeners.get(roomId) || []) {
+    if (role === 'caregiver') online.add(caregiverId); else patients++;
+  }
+  return { caregivers: online.size, online: [...online], patients };
 }
 
 function broadcastPresence(roomId) {
   send(roomId, 'presence', presence(roomId));
 }
 
+// Every caregiver sees each call in their list, but only the ones it's for get rung.
+function ringCaregivers(room, alert) {
+  send(room.id, 'ring', alert, alert.to || 'caregiver');
+}
+
 // keep proxies / phones from closing idle streams
 setInterval(() => {
-  for (const set of listeners.values()) for (const { res } of set) res.write(': ping\n\n');
+  for (const set of listeners.values()) for (const { res } of set) if (!res.writableEnded) res.write(': ping\n\n');
 }, 20000).unref();
 
 // ---------- helpers ----------
@@ -178,6 +224,7 @@ async function handle(req, res) {
     if (url.pathname === '/') return serveFile(res, 'index.html');
     if (parts[0] === 'caregiver' && parts.length === 2) return serveFile(res, 'caregiver.html');
     if (parts[0] === 'p' && parts.length === 2) return serveFile(res, 'patient.html');
+    if (parts[0] === 'invite' && parts.length === 2) return serveFile(res, 'invite.html');
     if (parts[0] !== 'api') return serveFile(res, url.pathname.slice(1));
   }
 
@@ -186,42 +233,69 @@ async function handle(req, res) {
   // POST /api/rooms  -> create a care link
   if (req.method === 'POST' && parts[1] === 'rooms' && parts.length === 2) {
     const body = await readBody(req);
+    const me = newCaregiver(clean(body.caregiverName) || 'Caregiver');
     const room = {
       id: token(6),
-      caregiverKey: token(18),
+      caregivers: [me],
       patientToken: token(12),
+      pairCode: pairCode(),
+      inviteToken: token(12),
       patientName: clean(body.patientName) || 'Patient',
-      caregiverName: clean(body.caregiverName) || 'Caregiver',
       createdAt: Date.now(),
       alerts: [],
+      meds: [],
+      medLog: [],
     };
     db.rooms[room.id] = room;
     save();
-    return json(res, 201, { ...publicRoom(room), caregiverKey: room.caregiverKey, patientToken: room.patientToken });
+    return json(res, 201, { ...publicRoom(room), caregiverId: me.id, caregiverKey: me.key, patientToken: room.patientToken });
+  }
+
+  // /api/invite/:token  -> another caregiver joins an existing care link
+  if (parts[1] === 'invite' && parts[2]) {
+    const room = Object.values(db.rooms).find((r) => r.inviteToken === parts[2]);
+    if (!room) return json(res, 404, { error: 'This invite link is no longer valid. Ask for a new one.' });
+    if (req.method === 'GET') return json(res, 200, publicRoom(room));
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      const me = newCaregiver(clean(body.name) || 'Caregiver');
+      room.caregivers.push(me);
+      save();
+      send(room.id, 'caregivers', publicRoom(room));
+      return json(res, 201, { ...publicRoom(room), caregiverId: me.id, caregiverKey: me.key });
+    }
   }
 
   // /api/rooms/:id/...  (caregiver side, requires key)
   if (parts[1] === 'rooms' && parts[2]) {
     const room = db.rooms[parts[2]];
-    if (!room || room.caregiverKey !== key) return json(res, 403, { error: 'Unknown room or wrong key' });
+    const me = room && caregiverByKey(room, key);
+    if (!me) return json(res, 403, { error: 'Unknown room or wrong key' });
     const sub = parts[3];
 
     if (req.method === 'GET' && !sub) {
+      if (!room.pairCode) { room.pairCode = pairCode(); save(); } // rooms made before codes existed
       return json(res, 200, {
         ...publicRoom(room),
+        caregiverId: me.id,
+        pairCode: room.pairCode,
         patientUrl: `${baseUrl(req)}/p/${room.patientToken}`,
+        inviteUrl: `${baseUrl(req)}/invite/${room.inviteToken}`,
         alerts: room.alerts,
+        meds: room.meds,
+        medLog: room.medLog,
         presence: presence(room.id),
       });
     }
-    if (req.method === 'GET' && sub === 'qr.svg') {
-      const svg = await QRCode.toString(`${baseUrl(req)}/p/${room.patientToken}`, {
+    if (req.method === 'GET' && (sub === 'qr.svg' || sub === 'invite.svg')) {
+      const target = sub === 'qr.svg' ? `p/${room.patientToken}` : `invite/${room.inviteToken}`;
+      const svg = await QRCode.toString(`${baseUrl(req)}/${target}`, {
         type: 'svg', margin: 1, errorCorrectionLevel: 'M',
       });
       res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
       return res.end(svg);
     }
-    if (req.method === 'GET' && sub === 'events') return subscribe(room.id, 'caregiver', req, res);
+    if (req.method === 'GET' && sub === 'events') return subscribe(room.id, 'caregiver', req, res, me.id);
 
     // POST /api/rooms/:id/alerts/:alertId  {status}
     if (req.method === 'POST' && sub === 'alerts' && parts[4]) {
@@ -232,6 +306,8 @@ async function handle(req, res) {
         return json(res, 400, { error: 'status must be seen, coming or resolved' });
       }
       alert.status = body.status;
+      alert.byId = me.id;
+      alert.byName = me.name;
       alert.updatedAt = Date.now();
       save();
       send(room.id, 'alert', alert);
@@ -241,10 +317,104 @@ async function handle(req, res) {
     // POST /api/rooms/:id/rotate  -> new QR (old patient link stops working)
     if (req.method === 'POST' && sub === 'rotate') {
       room.patientToken = token(12);
+      room.pairCode = pairCode();
       save();
       send(room.id, 'unpaired', {}, 'patient');
-      return json(res, 200, { patientToken: room.patientToken });
+      return json(res, 200, { patientToken: room.patientToken, pairCode: room.pairCode });
     }
+
+    // ---- medications (caregivers only) ----
+    const medsChanged = () => {
+      save();
+      send(room.id, 'meds', { meds: room.meds, medLog: room.medLog }, 'caregiver');
+      return json(res, 200, { meds: room.meds, medLog: room.medLog });
+    };
+
+    // POST /api/rooms/:id/meds  {name, dose}  -> add to the saved list
+    if (req.method === 'POST' && sub === 'meds' && !parts[4]) {
+      const body = await readBody(req);
+      const name = clean(body.name);
+      if (!name) return json(res, 400, { error: 'Medication name is required' });
+      room.meds.push({ id: token(6), name, dose: clean(body.dose) });
+      return medsChanged();
+    }
+
+    // POST /api/rooms/:id/meds/:medId/remove  (past log entries are kept)
+    if (req.method === 'POST' && sub === 'meds' && parts[4] && parts[5] === 'remove') {
+      room.meds = room.meds.filter((m) => m.id !== parts[4]);
+      return medsChanged();
+    }
+
+    // POST /api/rooms/:id/medlog  {medId} or {name, dose}, optional {takenAt, note}
+    if (req.method === 'POST' && sub === 'medlog' && !parts[4]) {
+      const body = await readBody(req);
+      const saved = room.meds.find((m) => m.id === body.medId);
+      const name = saved ? saved.name : clean(body.name);
+      if (!name) return json(res, 400, { error: 'Which medication?' });
+      const now = Date.now();
+      const takenAt = Number(body.takenAt);
+      room.medLog.unshift({
+        id: token(6),
+        name,
+        dose: saved ? saved.dose : clean(body.dose),
+        // Allow back-dating ("she took it at 8"), but not into the future.
+        takenAt: Number.isFinite(takenAt) && takenAt > 0 ? Math.min(takenAt, now) : now,
+        note: clean(body.note, 200),
+        byId: me.id,
+        byName: me.name,
+        loggedAt: now,
+      });
+      room.medLog.sort((a, b) => b.takenAt - a.takenAt);
+      room.medLog.length = Math.min(room.medLog.length, MAX_MED_LOG_KEPT);
+      return medsChanged();
+    }
+
+    // POST /api/rooms/:id/medlog/:entryId/remove  -> undo a mistaken entry
+    if (req.method === 'POST' && sub === 'medlog' && parts[4] && parts[5] === 'remove') {
+      room.medLog = room.medLog.filter((e) => e.id !== parts[4]);
+      return medsChanged();
+    }
+
+    // POST /api/rooms/:id/invite  -> new invite link (old one stops working)
+    if (req.method === 'POST' && sub === 'invite') {
+      room.inviteToken = token(12);
+      save();
+      return json(res, 200, { ok: true });
+    }
+
+    // POST /api/rooms/:id/caregivers/:caregiverId/remove
+    if (req.method === 'POST' && sub === 'caregivers' && parts[4] && parts[5] === 'remove') {
+      const gone = room.caregivers.find((c) => c.id === parts[4]);
+      if (!gone) return json(res, 404, { error: 'No such caregiver' });
+      if (room.caregivers.length === 1) return json(res, 400, { error: 'A care link needs at least one caregiver' });
+      room.caregivers = room.caregivers.filter((c) => c !== gone);
+      save();
+      send(room.id, 'removed', {}, gone.id);
+      for (const l of listeners.get(room.id) || []) {
+        if (l.caregiverId !== gone.id) continue;
+        listeners.get(room.id).delete(l);
+        l.res.end();
+      }
+      send(room.id, 'caregivers', publicRoom(room));
+      // Open calls meant only for the removed caregiver now go to everyone.
+      for (const alert of activeAlerts(room)) {
+        if (alert.to !== gone.id) continue;
+        setTarget(alert, null);
+        send(room.id, 'alert', alert);
+        if (alert.status === 'sent') ringCaregivers(room, alert);
+      }
+      save();
+      return json(res, 200, publicRoom(room));
+    }
+  }
+
+  // GET /api/pair/:code  -> the patient typed the code instead of scanning the QR
+  if (req.method === 'GET' && parts[1] === 'pair' && parts[2]) {
+    let code = '';
+    try { code = decodeURIComponent(parts[2]).toUpperCase().replace(/[^A-Z0-9]/g, ''); } catch { /* malformed */ }
+    const room = code && Object.values(db.rooms).find((r) => r.pairCode === code);
+    if (!room) return json(res, 404, { error: "That code didn't work. Check it on your caregiver's screen and try again." });
+    return json(res, 200, { patientToken: room.patientToken });
   }
 
   // /api/patient/:token/...  (patient side, the token is the QR secret)
@@ -267,12 +437,15 @@ async function handle(req, res) {
     if (req.method === 'POST' && sub === 'alerts' && !parts[4]) {
       const body = await readBody(req);
       const type = ALERT_TYPES[body.type] ? body.type : 'help';
+      // `to` picks one caregiver; anything else (or a removed caregiver) calls everyone.
+      const target = room.caregivers.find((c) => c.id === body.to);
       // Pressing the same button again re-rings the existing call instead of stacking duplicates.
       let alert = activeAlerts(room).find((a) => a.type === type);
       if (alert) {
         alert.rings = (alert.rings || 1) + 1;
         alert.status = 'sent';
         alert.updatedAt = Date.now();
+        setTarget(alert, target);
       } else {
         alert = {
           id: token(6),
@@ -285,12 +458,13 @@ async function handle(req, res) {
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
+        setTarget(alert, target);
         room.alerts.unshift(alert);
         room.alerts.length = Math.min(room.alerts.length, MAX_ALERTS_KEPT);
       }
       save();
       send(room.id, 'alert', alert);
-      send(room.id, 'ring', alert, 'caregiver');
+      ringCaregivers(room, alert);
       return json(res, 201, alert);
     }
 
