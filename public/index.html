@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="/app.css">
+  <title>CareCall — in-home call button</title>
+</head>
+<body>
+<main>
+  <div class="brand"><img src="/icon.svg" alt=""><h1>CareCall</h1></div>
+  <p class="muted">A "nurse call" button for care at home. You (the caregiver) create a care link,
+    the person you look after scans the QR code, and when they press their button your phone rings.</p>
+
+  <div class="card" id="existing" hidden>
+    <h2>Your care links</h2>
+    <div id="links"></div>
+  </div>
+
+  <form class="card" id="create">
+    <h2>Set up a new care link</h2>
+    <label for="patientName">Who are you caring for?</label>
+    <input id="patientName" placeholder="e.g. Grandma Rose" maxlength="60" required>
+    <label for="caregiverName">Your name (shown to them)</label>
+    <input id="caregiverName" placeholder="e.g. Sam" maxlength="60" required>
+    <p><button type="submit">Create link &amp; QR code</button></p>
+  </form>
+</main>
+<script src="/store.js"></script>
+<script>
+  const links = CareStore.all();
+  // A paired patient device that launches the installed app lands on "/": send it to its button.
+  const patientPath = localStorage.getItem('carecall.patient');
+  if (patientPath && !links.length) location.replace(patientPath);
+  if (links.length) {
+    document.getElementById('existing').hidden = false;
+    document.getElementById('links').innerHTML = links.map((l) =>
+      `<p><a href="/caregiver/${l.id}">${CareStore.esc(l.patientName)}</a> <span class="muted">— created ${new Date(l.createdAt).toLocaleDateString()}</span></p>`
+    ).join('');
+  }
+
+  document.getElementById('create').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const res = await fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patientName: document.getElementById('patientName').value,
+        caregiverName: document.getElementById('caregiverName').value,
+      }),
+    });
+    const room = await res.json();
+    CareStore.add(room);
+    location.href = `/caregiver/${room.id}`;
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="/app.css">
+  <title>CareCall — Caregiver</title>
+</head>
+<body>
+<main>
+  <div class="row" style="justify-content: space-between">
+    <div class="brand"><img src="/icon.svg" alt=""><div><h1 id="title">Caregiver</h1><span class="muted" id="subtitle"></span></div></div>
+    <span class="pill"><span class="dot" id="patientDot"></span><span id="patientPresence">Patient offline</span></span>
+  </div>
+
+  <div id="error" class="card hidden"></div>
+
+  <div class="banner" id="enable" style="margin-top:16px">
+    <div class="row" style="justify-content: space-between">
+      <span><b>Turn on sound &amp; alerts</b> so this device rings when they call.</span>
+      <button id="enableBtn">Turn on</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Calls</h2>
+    <div id="alerts"><p class="muted">No calls yet. Keep this page open — it will ring here.</p></div>
+  </div>
+
+  <details class="card" id="pairCard">
+    <summary><b>Pair the patient's device (QR code)</b></summary>
+    <p class="muted">On their phone or tablet, open the camera and scan this code. Then tap “Add to Home Screen” so the button is always one tap away.</p>
+    <img class="qr" id="qr" alt="QR code for the patient's call button">
+    <p class="link muted" id="patientUrl"></p>
+    <div class="row">
+      <button class="secondary" id="printBtn">Print QR</button>
+      <button class="secondary" id="rotateBtn">Make a new QR (unpair old one)</button>
+    </div>
+    <hr style="margin:20px 0;border:0;border-top:1px solid #e3e8f2">
+    <p class="muted">Want this dashboard on your own phone too? Open this private link there (don't share it):</p>
+    <p class="link muted" id="caregiverUrl"></p>
+  </details>
+</main>
+
+<div class="ringing hidden" id="ringing">
+  <div id="ringWho" style="font-size:1.3rem"></div>
+  <div class="big" id="ringWhat"></div>
+  <div id="ringNote"></div>
+  <div class="row" style="justify-content:center">
+    <button id="ringComing">I'm on my way</button>
+    <button id="ringSeen">Seen</button>
+  </div>
+</div>
+
+<script src="/store.js"></script>
+<script src="/caregiver.js"></script>
+</body>
+</html>
